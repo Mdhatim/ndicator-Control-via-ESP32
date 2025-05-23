@@ -1,0 +1,27 @@
+void indicator_control_logic(bool left_press, bool right_press,
+                             bool *left_on, bool *right_on, bool *hazard) {
+    static enum { IDLE, LEFT, RIGHT, HAZARD } state = IDLE;
+
+    switch (state) {
+        case IDLE:
+            if (left_press && right_press) state = HAZARD;
+            else if (left_press) state = LEFT;
+            else if (right_press) state = RIGHT;
+            break;
+        case LEFT:
+            if (right_press) state = RIGHT;
+            else if (left_press) state = IDLE;
+            break;
+        case RIGHT:
+            if (left_press) state = LEFT;
+            else if (right_press) state = IDLE;
+            break;
+        case HAZARD:
+            if (left_press || right_press) state = IDLE;
+            break;
+    }
+
+    *left_on = (state == LEFT || state == HAZARD);
+    *right_on = (state == RIGHT || state == HAZARD);
+    *hazard = (state == HAZARD);
+}
