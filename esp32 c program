@@ -1,0 +1,105 @@
+
+#define LEFT_BUTTON_PIN 14
+#define RIGHT_BUTTON_PIN 27
+#define LEFT_LED_PIN 18
+#define RIGHT_LED_PIN 19
+#define LEFT_LED_CHANNEL 0
+#define RIGHT_LED_CHANNEL 1
+bool leftPressed = false;
+bool rightPressed = false;
+bool leftOn = false;
+bool rightOn = false;
+bool hazard = false;
+bool toggleState = false;
+
+
+unsigned long lastDebounceLeft = 0;
+unsigned long lastDebounceRight = 0;
+unsigned long lastToggleTime = 0;
+unsigned long lastSchedulerTime = 0;
+
+void setup() {
+  pinMode(LEFT_BUTTON_PIN, INPUT_PULLUP);
+  pinMode(RIGHT_BUTTON_PIN, INPUT_PULLUP);
+  ledcSetup(LEFT_LED_CHANNEL, 5000, 8);   // 5kHz, 8-bit resolution
+  ledcSetup(RIGHT_LED_CHANNEL, 5000, 8);
+  ledcAttachPin(LEFT_LED_PIN, LEFT_LED_CHANNEL);
+  ledcAttachPin(RIGHT_LED_PIN, RIGHT_LED_CHANNEL);
+  Serial.begin(115200);
+}
+
+void loop() {
+  unsigned long now = millis();
+  if (now - lastSchedulerTime >= 100) {
+    lastSchedulerTime = now;
+    checkButtons();
+    updateStateLogic();
+    updateLEDs(now);
+    logStatus();
+  }
+}
+
+void checkButtons() {
+  static bool lastLeftState = HIGH;
+  static bool lastRightState = HIGH;
+
+  bool currentLeft = digitalRead(LEFT_BUTTON_PIN);
+  bool currentRight = digitalRead(RIGHT_BUTTON_PIN);
+
+  // Debounce logic: trigger only once per long press
+  if (currentLeft == LOW && lastLeftState == HIGH)
+    lastDebounceLeft = millis();
+
+  if (currentRight == LOW && lastRightState == HIGH)
+    lastDebounceRight = millis();
+
+  if ((millis() - lastDebounceLeft > 1000) && currentLeft == LOW)
+    leftPressed = true;
+
+  if ((millis() - lastDebounceRight > 1000) && currentRight == LOW)
+    rightPressed = true;
+
+  lastLeftState = currentLeft;
+  lastRightState = currentRight;
+}
+
+void updateStateLogic() {
+  if (leftPressed && rightPressed) {
+    hazard = true;
+    leftOn = rightOn = false;
+  } else if (leftPressed) {
+    if (hazard) hazard = false;
+    leftOn = !leftOn;
+    rightOn = false;
+  } else if (rightPressed) {
+    if (hazard) hazard = false;
+    rightOn = !rightOn;
+    leftOn = false;
+  }
+
+  leftPressed = false;
+  rightPressed = false;
+}
+
+void updateLEDs(unsigned long now) {
+  if (hazard || leftOn || rightOn) {
+    if (now - lastToggleTime >= 300) {
+      lastToggleTime = now;
+      toggleState = !toggleState;
+    }
+    ledcWrite(LEFT_LED_CHANNEL, (hazard || leftOn) ? (toggleState ? 255 : 0) : 0);
+    ledcWrite(RIGHT_LED_CHANNEL, (hazard || rightOn) ? (toggleState ? 255 : 0) : 0);
+  } else {
+    ledcWrite(LEFT_LED_CHANNEL, 0);
+    ledcWrite(RIGHT_LED_CHANNEL, 0);
+  }
+}
+
+void logStatus() {
+  Serial.print("Left: ");
+  Serial.print(leftOn ? "ON " : "OFF ");
+  Serial.print("| Right: ");
+  Serial.print(rightOn ? "ON " : "OFF ");
+  Serial.print("| Hazard: ");
+  Serial.println(hazard ? "ON" : "OFF");
+}
